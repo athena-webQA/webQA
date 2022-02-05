@@ -1,0 +1,3 @@
+[submodule "baseline/WebQA_Baseline"]
+	path = baseline/WebQA_Baseline
+	url = https://github.com/WebQnA/WebQA_Baseline.git
