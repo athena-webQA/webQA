@@ -1,0 +1,5 @@
+# data files
+baselines/WebQA_Baseline/data/WebQA_test.json
+baselines/WebQA_Baseline/data/WebQA_train_val.json
+baselines/WebQA_Baseline/data/imgs.lineidx
+baselines/WebQA_Baseline/data/imgs.tsv

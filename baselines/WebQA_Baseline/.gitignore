@@ -117,3 +117,9 @@ vlp/eval_0827.py
 *.sh
 .*
 !/.gitignore
+
+# data files
+data/WebQA_test.json
+data/WebQA_train_val.json
+data/imgs.lineidx
+data/imgs.tsv

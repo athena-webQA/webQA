@@ -195,8 +195,8 @@ def main():
                         help="max position embeddings")
 
     # webqa dataset
-    parser.add_argument('--txt_dataset_json_path', type=str, default="/home/yingshac/CYS/WebQnA/WebQnA_data_new/txt_dataset_0904_clean_fields.json")
-    parser.add_argument('--img_dataset_json_path', type=str, default="/home/yingshac/CYS/WebQnA/WebQnA_data_new/img_dataset_0904_clean_fields.json")
+    parser.add_argument('--txt_dataset_json_path', type=str, default="data/WebQA_train_val.json")
+    parser.add_argument('--img_dataset_json_path', type=str, default="data/imgs.lineidx")
     parser.add_argument('--gold_feature_folder', type=str, default="/data/yingshac/MMMHQA/imgFeatures_upd/gold")
     parser.add_argument('--distractor_feature_folder', type=str, default="/data/yingshac/MMMHQA/imgFeatures_upd/distractors")
     parser.add_argument('--x_distractor_feature_folder', type=str, default="/data/yingshac/MMMHQA/imgFeatures_x_distractors/x_distractors")

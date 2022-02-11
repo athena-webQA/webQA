@@ -363,6 +363,7 @@ class webqaDataset_filter_with_both(torch.utils.data.Dataset):
         self.instance_list = []
         if device is not None:
             self.device=device
+        print(dataset_json_path)
         assert os.path.exists(dataset_json_path), "loader.Dataset: dataset json file doesn't exist!"
         assert os.path.exists(gold_feature_folder), "loader.Dataset: gold feature folder doesn't exist!"
         assert os.path.exists(distractor_feature_folder), "loader.Dataset: distractor feature folder doesn't exist!"
