@@ -1,0 +1,5 @@
+checkpoints/*
+eval_data/*
+output/*
+slurm*
+results
