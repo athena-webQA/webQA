@@ -3,3 +3,4 @@ eval_data/*
 output/*
 slurm*
 results
+**/__pycache__
