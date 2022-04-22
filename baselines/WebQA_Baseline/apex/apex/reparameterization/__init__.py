@@ -1,8 +1,11 @@
+import warnings
+warnings.warn("reparameterization will be removed by the end of June, 2022", FutureWarning)
+
 from .weight_norm import WeightNorm
 from .reparameterization import Reparameterization
 
 def apply_weight_norm(module, name='', dim=0, hook_child=True):
-    """
+    r"""
     Applies weight normalization to a parameter in the given module.
     If no parameter is provided, applies weight normalization to all
     parameters in model (except 1-d vectors and scalars).

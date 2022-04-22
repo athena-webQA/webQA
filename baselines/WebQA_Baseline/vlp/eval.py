@@ -22,6 +22,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--Qcate_breakdown", type=str, default='["all"]')
 parser.add_argument("--file", type=str)
 parser.add_argument('--no_norm', action='store_true')
+parser.add_argument('--dir', type=str)
 args = parser.parse_args()
 
 import sys
@@ -134,7 +135,7 @@ print("Use categories: ", Qcate_breakdown)
 print("Use normalization = ", not args.no_norm)
 
 # Please change the path to your output folder
-with open(os.path.join("/home/yingshac/CYS/WebQnA/VLP/vlp/light_output/", args.file), "r") as fp:
+with open(os.path.join(args.dir, args.file), "r") as fp:
     lines = fp.readlines()
     header = lines[0].strip().split('\t')
     rows = lines[1:]
@@ -225,7 +226,7 @@ print("mul_avg = {}".format(mul_avg))
 print(" ------------------------------------------------------------------------------------ \n")
 if not 'all' in Qcate_breakdown: args.file = args.file.split(".")[0] + "_{}".format("|".join(Qcate_breakdown)) + ".tsv"
 
-with open(os.path.join("/home/yingshac/CYS/WebQnA/VLP/vlp/light_output/", args.file.replace(".tsv", ".txt")), "w") as f:
+with open(os.path.join(args.dir, args.file.replace(".tsv", ".txt")), "w") as f:
     f.write(datetime.now(tz=timezone('US/Eastern')).strftime("%y-%m-%d %H:%M:%S") + '\n')
     f.write('\nUse Q categories: {}\nUse normalization = {}\n#Eval_samples = {}\n'.format(Qcate_breakdown, not args.no_norm, len(mul_scores)))
     f.write('\n --------------------- metrics -----------------------\n')

@@ -53,7 +53,10 @@ class SyncBatchNorm(_BatchNorm):
             raise AttributeError("channel_last is not supported by primitive SyncBatchNorm implementation. Try install apex with `--cuda_ext` if channel_last is desired.")
 
         if not SyncBatchNorm.warned:
-            print("Warning:  using Python fallback for SyncBatchNorm, possibly because apex was installed without --cuda_ext.  The exception raised when attempting to import the cuda backend was: ", self.syncbn_import_error)
+            if hasattr(self, "syncbn_import_error"):
+                print("Warning:  using Python fallback for SyncBatchNorm, possibly because apex was installed without --cuda_ext.  The exception raised when attempting to import the cuda backend was: ", self.syncbn_import_error)
+            else:
+                print("Warning:  using Python fallback for SyncBatchNorm")
             SyncBatchNorm.warned = True
 
         super(SyncBatchNorm, self).__init__(num_features, eps=eps, momentum=momentum, affine=affine, track_running_stats=track_running_stats)
@@ -66,16 +69,28 @@ class SyncBatchNorm(_BatchNorm):
         torch.cuda.nvtx.range_push("sync_bn_fw_with_mean_var")
         mean = None
         var = None
+        cast = None
+        out = None
+
+        # casting to handle mismatch input type to layer type
+        if self.running_mean is not None:
+            if self.running_mean.dtype != input.dtype:
+                input = input.to(self.running_mean.dtype)
+                cast = input.dtype
+        elif self.weight is not None:
+            if self.weight.dtype != input.dtype:
+                input = input.to(self.weight.dtype)
+                cast = input.dtype
+
         if not self.training and self.track_running_stats:
             # fall back to pytorch implementation for inference
             torch.cuda.nvtx.range_pop()
-            return F.batch_norm(input, self.running_mean, self.running_var, self.weight, self.bias, False, 0.0, self.eps)
+            out = F.batch_norm(input, self.running_mean, self.running_var, self.weight, self.bias, False, 0.0, self.eps)
         else:
             process_group = self.process_group
-            world_size = 0
+            world_size = 1
             if not self.process_group:
                 process_group = torch.distributed.group.WORLD
-            world_size = torch.distributed.get_world_size(process_group)
             self.num_batches_tracked += 1
             with torch.no_grad():
                 channel_first_input = input.transpose(0, 1).contiguous()
@@ -88,6 +103,7 @@ class SyncBatchNorm(_BatchNorm):
                 local_sqr_mean = torch.pow(
                     squashed_input_tensor_view, 2).mean(1)
                 if torch.distributed.is_initialized():
+                    world_size = torch.distributed.get_world_size(process_group)
                     torch.distributed.all_reduce(
                         local_mean, ReduceOp.SUM, process_group)
                     mean = local_mean / world_size
@@ -114,4 +130,5 @@ class SyncBatchNorm(_BatchNorm):
                         (m-1) * self.momentum * var + \
                         (1 - self.momentum) * self.running_var
             torch.cuda.nvtx.range_pop()
-            return SyncBatchnormFunction.apply(input, self.weight, self.bias, mean, var, self.eps, process_group, world_size)
+            out = SyncBatchnormFunction.apply(input, self.weight, self.bias, mean, var, self.eps, process_group, world_size)
+        return out.to(cast)

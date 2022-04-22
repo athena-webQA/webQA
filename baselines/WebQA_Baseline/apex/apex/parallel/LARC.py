@@ -1,6 +1,5 @@
 import torch
 from torch import nn
-from torch.autograd import Variable
 from torch.nn.parameter import Parameter
 
 class LARC(object):
@@ -38,7 +37,6 @@ class LARC(object):
     """
 
     def __init__(self, optimizer, trust_coefficient=0.02, clip=True, eps=1e-8):
-        self.param_groups = optimizer.param_groups
         self.optim = optimizer
         self.trust_coefficient = trust_coefficient
         self.eps = eps
@@ -50,9 +48,21 @@ class LARC(object):
     def __setstate__(self, state):
         self.optim.__setstate__(state)
 
+    @property
+    def state(self):
+        return self.optim.state
+
     def __repr__(self):
         return self.optim.__repr__()
 
+    @property
+    def param_groups(self):
+        return self.optim.param_groups
+
+    @param_groups.setter
+    def param_groups(self, value):
+        self.optim.param_groups = value
+    
     def state_dict(self):
         return self.optim.state_dict()
 

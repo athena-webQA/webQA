@@ -23,6 +23,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import pdb
+
 import os
 import copy
 import json
@@ -1001,7 +1003,7 @@ class BertPreTrainingPairRel(nn.Module):
 class BertForWebqa(PreTrainedBertModel):
     """refer to BertForPreTraining"""
 
-    def __init__(self, config, num_labels=2, max_len_img_cxt=200, use_vinvl=False):
+    def __init__(self, config, detectron_weights_path=None, num_labels=2, max_len_img_cxt=200, use_vinvl=False):
         super(BertForWebqa, self).__init__(config)
         self.bert = BertModel(config)
         self.cls = BertPreTrainingHeads(
@@ -1011,6 +1013,8 @@ class BertForWebqa(PreTrainedBertModel):
         self.crit_filter = nn.CrossEntropyLoss(reduction='none')
         self.num_labels = num_labels
         self.max_len_img_cxt = max_len_img_cxt
+        self.detectron_weights_path = detectron_weights_path
+        print("self.detectron_weights_path", self.detectron_weights_path)
         if hasattr(config, 'label_smoothing') and config.label_smoothing:
             self.crit_mask_lm_smoothed = LabelSmoothingLoss(
                 config.label_smoothing, config.vocab_size, ignore_index=0, reduction='none')
@@ -1033,10 +1037,11 @@ class BertForWebqa(PreTrainedBertModel):
                                         nn.Dropout(config.hidden_dropout_prob)) # use to be 0.3
             try:
                 self.vis_embed[0].weight.data.copy_(torch.from_numpy(pickle.load(
-                        open('/home/yingshac/CYS/WebQnA/cpts/detectron_weights/fc7_w.pkl', 'rb'))))
+                        open(os.path.join(self.detectron_weights_path, 'fc7_w.pkl'), 'rb'))))
                 self.vis_embed[0].bias.data.copy_(torch.from_numpy(pickle.load(
-                        open('/home/yingshac/CYS/WebQnA/cpts/detectron_weights/fc7_b.pkl', 'rb'))))
-            except:
+                        open(os.path.join(self.detectron_weights_path, 'fc7_b.pkl'), 'rb'))))
+            except Exception as e:
+                print(e)
                 raise Exception('Cannot find Detectron fc7 weights! Download from https://dl.fbaipublicfiles.com/ActivityNet-Entities/ActivityNet-Entities/detectron_weights.tar.gz and uncompress under the code root directory.')
 
             self.vis_pe_embed = nn.Sequential(nn.Linear(6+1601, config.hidden_size),
@@ -1048,7 +1053,7 @@ class BertForWebqa(PreTrainedBertModel):
 
 
     def forward(self, vis_feats=None, vis_pe=None, input_ids=None, token_type_ids=None, attention_mask=None, masked_lm_labels=None, do_filter_task=None, filter_label=None, logit_mask=None, context=None, cxt_modality_label=None, next_sentence_label=None, masked_pos=None, masked_weights=None, task_idx=None, drop_worst_ratio=0.2, filter_infr_th=None, tokenizer=None):
-        
+        pdb.set_trace()
         ## TODO: track the change of context_is_img --> context, pass cxt_modality_label to BertEmbedding
         if context[0] in ['img', 'both'] and vis_feats.size()[-1] > 1: 
             vis_feats = self.vis_embed(vis_feats) # image region features (NC1+NC2+ ... +NC_B, 100, hidden_size), NC = num_choices
@@ -1095,7 +1100,6 @@ class BertForWebqa(PreTrainedBertModel):
                 #loss = torch.sum(- m, dim=-1) * num_flags
                 normalizer = torch.sum(logit_mask, dim=-1)
                 m = lp * target * logit_mask.view(-1, num_choices, 1).repeat(1,1,2) # target.transpose --> batch_size x num_choices x 2
-                
                 
                 loss = (-m).view(batch_size, -1).sum(dim=-1)/(normalizer+1e-8)
                 return torch.mean(loss)
@@ -1148,7 +1152,7 @@ class BertForWebqa(PreTrainedBertModel):
             if isinstance(cxt_modality_label, list): cxt_modality_label = torch.squeeze(torch.LongTensor(cxt_modality_label), 1)
             sequence_output, pooled_output = self.bert(vis_feats, vis_pe, input_ids, token_type_ids,\
                                             attention_mask, context[0], cxt_modality_label, output_all_encoded_layers=False, max_len_img_cxt=self.max_len_img_cxt)
-
+            
             def gather_seq_out_by_pos(seq, pos):
                 return torch.gather(seq, 1, pos.unsqueeze(2).expand(-1, -1, seq.size(-1)))
 

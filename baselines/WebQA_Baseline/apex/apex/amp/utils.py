@@ -5,6 +5,12 @@ import itertools
 
 import torch
 
+def is_cuda_enabled():
+    return torch.version.cuda is not None
+
+def get_cuda_version():
+    return tuple(int(x) for x in torch.version.cuda.split('.'))
+
 def is_fp_tensor(x):
     if is_nested(x):
         # Fast-fail version of all(is_fp_tensor)
@@ -126,25 +132,19 @@ def as_inplace(fns):
         yield x + '_'
 
 def has_func(mod, fn):
-    if isinstance(mod, torch.nn.backends.backend.FunctionBackend):
-        return fn in mod.function_classes
-    elif isinstance(mod, dict):
+    if isinstance(mod, dict):
         return fn in mod
     else:
         return hasattr(mod, fn)
 
 def get_func(mod, fn):
-    if isinstance(mod, torch.nn.backends.backend.FunctionBackend):
-        return mod.function_classes[fn]
-    elif isinstance(mod, dict):
+    if isinstance(mod, dict):
         return mod[fn]
     else:
         return getattr(mod, fn)
 
 def set_func(mod, fn, new_fn):
-    if isinstance(mod, torch.nn.backends.backend.FunctionBackend):
-        mod.function_classes[fn] = new_fn
-    elif isinstance(mod, dict):
+    if isinstance(mod, dict):
         mod[fn] = new_fn
     else:
         setattr(mod, fn, new_fn)

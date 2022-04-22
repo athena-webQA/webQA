@@ -4,18 +4,14 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import gc
 import os
+import pdb
 os.environ['MASTER_ADDR'] = 'localhost'
 #os.environ['MASTER_PORT'] = '12355'
 import sys
-#sys.path.append("/home/yingshac/CYS/WebQnA/VLP")
-#sys.path.append("/home/yingshan/CYS/WebQnA/VLP")
-####### Deep Karkhanis == Soundarya Krishnan == 2/5/2022 #########
-#sys.path.append("/home/ubuntu/webQA/baselines/WebQA_Baseline/vlp")
-#sys.path.insert(1,"/home/ubuntu/webQA/baselines/WebQA_Baseline/pytorch_pretrained_bert")
-##################################################################
-
-
+sys.path.append("/projects/tir6/general/adityasv/webQA/baselines/WebQA_Baseline")
+sys.path.append("/projects/tir6/general/adityasv/webQA/baselines/WebQA_Baseline")
 import logging
 import glob
 import math, time
@@ -60,6 +56,7 @@ def _get_max_epoch_model(output_dir):
         return None
 
 def _get_loader_from_dataset(train_dataset, world_size, train_batch_size, num_workers, collate_fn):
+    print('len(train_dataset) ', len(train_dataset), ' train batch size ', train_batch_size)
     if world_size == 1:
         print("\nRandomSampler")
         train_sampler = RandomSampler(train_dataset, replacement=False)
@@ -95,6 +92,10 @@ def main():
                         default='/data/yingshac/MMMHQA/ckpts/no_model_name_specified/',
                         type=str,
                         help="The output directory where checkpoints will be written.")
+    parser.add_argument("--detectron_weights_path",
+                        type=str,
+                        required=True,
+                        help="where are the detectron weights stored?!")
     parser.add_argument("--output_dir",
                         default='light_output/no_model_name_specified/',
                         type=str,
@@ -104,8 +105,7 @@ def main():
                         type=str,
                         help="The output directory where the log will be written.")
     parser.add_argument("--model_recover_path",
-                        #default=None,
-                        default="/home/yingshac/CYS/WebQnA/cpts/cc_g8_lr1e-4_batch512_s0.75_b0.25/model.30.bin",
+                        default=None,
                         type=str,
                         help="The file of fine-tuned pretraining model.")
     parser.add_argument("--do_train",
@@ -130,7 +130,7 @@ def main():
                         action='store_true',
                         help="Weight decay to the original weights.")
     parser.add_argument("--num_train_epochs",
-                        default=30,
+                        default=10,
                         type=int,
                         help="Total number of training epochs to perform.")
     parser.add_argument("--warmup_proportion",
@@ -195,11 +195,15 @@ def main():
                         help="max position embeddings")
 
     # webqa dataset
-    parser.add_argument('--txt_dataset_json_path', type=str, default="/home/yingshac/CYS/WebQnA/WebQnA_data_new/txt_dataset_0904_clean_fields.json")
-    parser.add_argument('--img_dataset_json_path', type=str, default="/home/yingshac/CYS/WebQnA/WebQnA_data_new/img_dataset_0904_clean_fields.json")
-    parser.add_argument('--gold_feature_folder', type=str, default="/data/yingshac/MMMHQA/imgFeatures_upd/gold")
-    parser.add_argument('--distractor_feature_folder', type=str, default="/data/yingshac/MMMHQA/imgFeatures_upd/distractors")
-    parser.add_argument('--x_distractor_feature_folder', type=str, default="/data/yingshac/MMMHQA/imgFeatures_x_distractors/x_distractors")
+    parser.add_argument('--txt_dataset_json_path', type=str, default="/home/yingshac/CYS/WebQnA/WebQnA_data_new/WebQA_0904_concat_newimgid_newguid.json")
+    parser.add_argument('--img_dataset_json_path', type=str, default="/home/yingshac/CYS/WebQnA/WebQnA_data_new/WebQA_0904_concat_newimgid_newguid.json")
+    # Image ids were sorted by gold/distractor/x_distractor in the zero version
+    #parser.add_argument('--gold_feature_folder', type=str, default="/data/yingshac/WebQA/imgFeatures_upd/gold")
+    #parser.add_argument('--distractor_feature_folder', type=str, default="/data/yingshac/WebQA/imgFeatures_upd/distractors")
+    #parser.add_argument('--x_distractor_feature_folder', type=str, default="/data/yingshac/WebQA/imgFeatures_x_distractors/x_distractors")
+
+    parser.add_argument('--feature_folder', type=str, default="/data/yingshac/WebQA/x101fpn_feature_release")
+    parser.add_argument('--image_id_map_path', type=str, default="/home/yingshac/CYS/WebQnA/WebQnA_data_new/image_id_map_0328.pkl")
 
     #parser.add_argument('--img_metadata_path', type=str, default="/home/yingshac/CYS/WebQnA/WebQnA_data/img_metadata-Copy1.json", help="how many samples should be loaded into memory")
     parser.add_argument('--use_num_samples', type=int, default=-1, help="how many samples should be loaded into memory")
@@ -257,13 +261,14 @@ def main():
 
     log_txt_content = []
     print('global_rank: {}, local rank: {}'.format(args.global_rank, args.local_rank))
+    print(args)
     args.max_seq_length = args.max_len_b + args.max_len_a + 3 # +3 for 2x[SEP] and [CLS]
     args.dist_url = args.dist_url.replace('[PT_OUTPUT_DIR]', args.output_dir)
     args.use_img_meta = not args.no_img_meta
     args.use_img_content = not args.no_img_content
     args.use_txt_fact= not args.no_txt_fact
     assert args.len_vis_input == 100, "run main: only support 100 region features per image"
-    assert args.output_dir.split('/')[-1] == args.ckpts_dir.split('/')[-1], "Warning: folder names for output & ckpts are not the same"
+    # assert args.output_dir.split('/')[-1] == args.ckpts_dir.split('/')[-1], "Warning: folder names for output & ckpts are not the same"
     # output config
     os.makedirs(args.output_dir, exist_ok=True)
     os.makedirs(args.ckpts_dir, exist_ok=True)
@@ -334,10 +339,9 @@ def main():
             if args.use_x_distractors:
                 train_dataset = webqa_loader.webqaDataset_filter_with_both(dataset_json_path=args.txt_dataset_json_path, \
                     split=args.split, Qcate=args.Qcate, \
-                    batch_size=args.train_batch_size, tokenizer=tokenizer, gold_feature_folder=args.gold_feature_folder, \
-                    distractor_feature_folder=args.distractor_feature_folder, x_distractor_feature_folder=args.x_distractor_feature_folder, \
+                    batch_size=args.train_batch_size, tokenizer=tokenizer, feature_folder=args.feature_folder, \
                     use_num_samples=args.use_num_samples, processor=processor, answer_provided_by='txt', \
-                    max_snippets=args.txt_filter_max_choices, max_imgs=args.img_filter_max_choices, device=device)
+                    max_snippets=args.txt_filter_max_choices, max_imgs=args.img_filter_max_choices, imgid_map=args.image_id_map_path, device=device)
             else:
                 train_dataset = webqa_loader.webqaDataset_filter(dataset_json_path=args.txt_dataset_json_path, split=args.split, Qcate=args.Qcate, \
                     batch_size=args.train_batch_size, tokenizer=tokenizer, use_num_samples=args.use_num_samples, \
@@ -350,16 +354,13 @@ def main():
         if "img" in args.answer_provided_by:
             if args.use_x_distractors:
                 train_dataset = webqa_loader.webqaDataset_filter_with_both(dataset_json_path=args.img_dataset_json_path, \
-                    split=args.split, Qcate=args.Qcate, \
-                    batch_size=args.train_batch_size, tokenizer=tokenizer, gold_feature_folder=args.gold_feature_folder, \
-                    distractor_feature_folder=args.distractor_feature_folder, x_distractor_feature_folder=args.x_distractor_feature_folder, \
+                    split=args.split, Qcate=args.Qcate, batch_size=args.train_batch_size, tokenizer=tokenizer, feature_folder=args.feature_folder, \
                     use_num_samples=args.use_num_samples, processor=processor, answer_provided_by='img', \
-                    max_snippets=args.txt_filter_max_choices, max_imgs=args.img_filter_max_choices, device=device)
+                    max_snippets=args.txt_filter_max_choices, max_imgs=args.img_filter_max_choices, imgid_map=args.image_id_map_path, device=device)
             else:
                 train_dataset = webqa_loader.webqaDataset_filter_with_img(dataset_json_path=args.img_dataset_json_path, split=args.split, Qcate=args.Qcate, \
-                    batch_size=args.train_batch_size, tokenizer=tokenizer, gold_feature_folder=args.gold_feature_folder, \
-                    distractor_feature_folder=args.distractor_feature_folder, use_num_samples=args.use_num_samples, \
-                    processor=processor, filter_max_choices=args.img_filter_max_choices, device=device)
+                    batch_size=args.train_batch_size, tokenizer=tokenizer, feature_folder=args.feature_folder, \
+                    use_num_samples=args.use_num_samples, processor=processor, filter_max_choices=args.img_filter_max_choices, imgid_map=args.image_id_map_path, device=device)
             train_dataloader, train_sampler = _get_loader_from_dataset(train_dataset, args.world_size, args.train_batch_size, args.num_workers, batch_list_to_batch_tensors)
             train_dataloaders.append(train_dataloader)
             train_samplers.append(train_sampler)
@@ -376,8 +377,7 @@ def main():
         
         if "img" in args.answer_provided_by:
             train_dataset = webqa_loader.webqaDataset_qa_with_img(dataset_json_path=args.img_dataset_json_path, split=args.split, Qcate=args.Qcate, \
-                    batch_size=args.train_batch_size, tokenizer=tokenizer, gold_feature_folder=args.gold_feature_folder, \
-                    distractor_feature_folder=args.distractor_feature_folder, use_num_samples=args.use_num_samples, \
+                    batch_size=args.train_batch_size, tokenizer=tokenizer, feature_folder=args.feature_folder, use_num_samples=args.use_num_samples, \
                     processor=processor, device=device)
             train_dataloader, train_sampler = _get_loader_from_dataset(train_dataset, args.world_size, args.train_batch_size, args.num_workers, batch_list_to_batch_tensors)
             train_dataloaders.append(train_dataloader)
@@ -421,7 +421,9 @@ def main():
         assert args.scst == False, 'must init from maximum likelihood training'
         _state_dict = {} if args.from_scratch else None
         model = BertForWebqa.from_pretrained(
-            args.bert_model, state_dict=_state_dict, num_labels=cls_num_labels,
+            args.bert_model,
+            detectron_weights_path=args.detectron_weights_path,
+            state_dict=_state_dict, num_labels=cls_num_labels,
             type_vocab_size=type_vocab_size, relax_projection=relax_projection,
             config_path=args.config_path, task_idx=task_idx_proj,
             max_position_embeddings=args.max_position_embeddings, label_smoothing=args.label_smoothing,
@@ -448,6 +450,7 @@ def main():
         if not args.scst:
             model = BertForWebqa.from_pretrained(
                 args.bert_model, state_dict=model_recover, num_labels=cls_num_labels,
+                detectron_weights_path=args.detectron_weights_path,
                 type_vocab_size=type_vocab_size, relax_projection=relax_projection,
                 config_path=args.config_path, task_idx=task_idx_proj,
                 max_position_embeddings=args.max_position_embeddings, label_smoothing=args.label_smoothing,
@@ -467,6 +470,7 @@ def main():
             model.bert.embeddings.token_type_embeddings.float()
     print("model.to(device)")
     model.to(device)
+    print("model.to(device)")
     if args.local_rank != -1:
         try:
             # from apex.parallel import DistributedDataParallel as DDP
@@ -516,7 +520,7 @@ def main():
                              #t_total=t_total,
                              #weight_decay = args.weight_decay)
 
-    if recover_step:
+    if recover_step and args.do_train:
         logger.info("***** Recover optimizer: %d *****", recover_step)
         optim_recover = torch.load(os.path.join(
             args.ckpts_dir, "optim.{0}.bin".format(recover_step)))
@@ -597,6 +601,9 @@ def main():
                 filter_loss.append(cls_loss.item())
                 loss_dict[loader_idx].append(loss.item())
                 scst_reward.append(mean_reward.item())
+
+                torch.cuda.empty_cache()
+                gc.collect()
                 #print("\n ---------------------- loss.grad ------------------------ \n")
                 #for name, parms in model.named_parameters():
                     #print('-->name:', name, '-->grad_requirs:',parms.requires_grad, ' -->grad_value:',parms.grad)
@@ -651,10 +658,6 @@ def main():
                     
                     optimizer.zero_grad()
                     global_step += 1
-
-            print(qa_loss)
-            print(filter_loss)
-            print(loss_dict)
             
             # Save a trained model
             logger.info(
@@ -773,8 +776,7 @@ def main():
             with open(os.path.join(args.output_dir, "val_loss.txt"), "a") as f:
                 f.write("\nrecover_step = {}, use_num_samples = {}, answer_provided_by = {}, task = {}\n".format(recover_step, args.use_num_samples, args.answer_provided_by, args.task_to_learn))
                 f.write(str(np.mean([l for L in loss_dict for l in L])))
-
-            
+         
     else: # inference mode
         if "img" in args.answer_provided_by:
             print(args.use_img_meta)
@@ -783,11 +785,15 @@ def main():
             log_txt_content.append("use_img_meta = {}".format(args.use_img_meta))
             log_txt_content.append("\nimg Filter_max_choices: {}".format(args.img_filter_max_choices)) ## when txt is included, modify here!
             print("\nimg Filter_max_choices: {}".format(args.img_filter_max_choices))
+            if args.use_x_distractors: print("\ntxt Filter_max_choices: {}".format(args.txt_filter_max_choices))
+
         if "txt" in args.answer_provided_by:
             print(args.use_txt_fact)
             log_txt_content.append("use_txt_fact = {}".format(args.use_txt_fact))
             log_txt_content.append("\ntxt Filter_max_choices: {}".format(args.txt_filter_max_choices)) ## when txt is included, modify here!
             print("\ntxt Filter_max_choices: {}".format(args.txt_filter_max_choices))
+            if args.use_x_distractors: print("\nimg Filter_max_choices: {}".format(args.img_filter_max_choices))
+
         print("-------------------- Filter Inference mode ------------------------")
         log_txt_content.append("-------------------- Filter Inference mode ------------------------")
         

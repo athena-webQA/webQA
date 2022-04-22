@@ -25,7 +25,8 @@ from torch.optim.optimizer import required
 from torch.nn.utils import clip_grad_norm_
 
 from collections import defaultdict
-from torch._six import container_abcs
+# from torch._six import container_abcs
+import collections.abc as container_abcs
 from copy import deepcopy
 from itertools import chain
 
