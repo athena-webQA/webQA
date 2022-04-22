@@ -1,0 +1,4 @@
+**/__pycache__
+**/slurm*
+webqa_dataset/*
+bart-webqa/*
